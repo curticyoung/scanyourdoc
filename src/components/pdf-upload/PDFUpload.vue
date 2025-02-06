@@ -8,7 +8,7 @@
           </n-icon>
         </template>
         <n-text>
-          {{ t('settings.pdfSelectLabel') }}
+          {{ t('settings.fileSelectLabel') }}
         </n-text>
       </n-button>
     </n-space>
@@ -23,15 +23,24 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 
 const emit = defineEmits<{
-  (e: 'update:pdf', info: File | undefined): void
+  (e: 'update:pdf', file: File | undefined): void
 }>()
 
 async function onClick() {
-  const file = await fileOpen({
-    description: 'PDF Files',
-    mimeTypes: ['application/pdf'],
-    extensions: ['.pdf']
-  })
-  emit('update:pdf', file)
+  try {
+    const file = await fileOpen({
+      description: 'PDF and Word Documents',
+      mimeTypes: [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ],
+      extensions: ['.pdf', '.docx']
+    })
+    
+    console.log('Selected file:', file.name, file.type)
+    emit('update:pdf', file)
+  } catch (e) {
+    console.error('Error selecting file:', e)
+  }
 }
 </script>

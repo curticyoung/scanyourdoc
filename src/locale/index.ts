@@ -3,7 +3,8 @@ import { createI18n } from 'vue-i18n'
 import { en } from './en'
 import { zhCN } from './zh-CN'
 
-const currentLocale = navigator?.language
+// 使用 navigator.language 并只保留主语言部分，如 "en-US" -> "en"
+const currentLocale = navigator.language.split('-')[0]
 
 type DeepPartial<T> = T extends object
   ? {

@@ -23,48 +23,26 @@ import { ref } from 'vue'
 import { computedAsync } from '@vueuse/core'
 import PreviewPagination from './PreviewPagination.vue'
 import { NSpace } from 'naive-ui'
+import type { DocumentRenderer, ScanRenderer } from '@/utils/document-renderer/types'
 
 const page = ref(1)
 const scanning = ref(false)
 
-interface PDFRenderer {
-  renderPage(
-    page: number,
-    scale: number
-  ): Promise<{
-    blob: Blob
-    width: number
-    height: number
-  }>
-  getNumPages(): Promise<number>
-}
-
-interface ScanRenderer {
-  renderPage(
-    image: Blob,
-    options?: {
-      signal?: AbortSignal
-    }
-  ): Promise<{
-    blob: Blob
-  }>
-}
-
 const props = defineProps<{
-  pdfRenderer?: PDFRenderer
+  documentRenderer?: DocumentRenderer
   scanRenderer?: ScanRenderer
   scale: number
 }>()
 
 const image = computedAsync(async () => {
-  if (!props.pdfRenderer)
+  if (!props.documentRenderer)
     return {
       blob: undefined,
       height: undefined,
       width: undefined
     }
 
-  const { blob, width, height } = await props.pdfRenderer.renderPage(page.value, props.scale)
+  const { blob, width, height } = await props.documentRenderer.renderPage(page.value, props.scale)
   return {
     blob,
     width,
@@ -93,7 +71,7 @@ const scanImage = computedAsync(
 
 const numPages = computedAsync(async () => {
   page.value = 1
-  if (!props.pdfRenderer) return 1
-  return await props.pdfRenderer.getNumPages()
+  if (!props.documentRenderer) return 1
+  return await props.documentRenderer.getNumPages()
 }, 1)
 </script>

@@ -6,8 +6,8 @@
     <n-grid x-gap="25" y-gap="25" :cols="12" item-responsive responsive="screen">
       <n-grid-item span="12 s:5 m:4 l:3">
         <n-space vertical>
-          <PDFUpload @update:pdf="pdf = $event" />
-          <PDFInfo :pdf="pdf" v-if="pdf" />
+          <PDFUpload @update:pdf="handleFileChange" />
+          <PDFInfo :pdf="file" v-if="file" />
 
           <ScanSettingsCard v-model:config="config" />
 
@@ -21,7 +21,7 @@
       </n-grid-item>
       <n-grid-item span="12 s:7 m:8 l:9">
         <PreviewCompare
-          :pdfRenderer="pdfRenderer"
+          :documentRenderer="documentRenderer"
           :scanRenderer="scanRenderer"
           :scale="config.scale"
         />
@@ -42,6 +42,8 @@ import BackToIndex from '@/components/buttons/BackToIndex.vue'
 import { useHead } from '@unhead/vue'
 import { useI18n } from 'vue-i18n'
 import { PDF } from '@/utils/pdf-renderer/pdfjs'
+import { DocxRenderer } from '@/utils/docx-renderer/DocxRenderer'
+import type { DocumentRenderer } from '@/utils/document-renderer/types'
 import PreviewCompare from '@/components/page-preview/PreviewCompare.vue'
 import SaveButtonCard from '@/components/save-button/SaveButtonCard.vue'
 import { useSaveScannedPDF } from '@/composables/save-scanned-pdf'
@@ -57,24 +59,17 @@ useHead({
   meta: [{ name: 'description', content: t('base.description') }]
 })
 
-const pdf = ref<File | undefined>(undefined)
-
-const initExamplePDF = async () => {
-  const response = await fetch(PDFURL)
-  const blob = await response.blob()
-  const file = new File([blob], 'example.pdf')
-  if (!pdf.value) {
-    pdf.value = file
-  }
-}
-
-initExamplePDF()
-
+const file = ref<File>()
 const config = ref<ScanConfig>(defaultConfig)
-const pdfRenderer = computed(() => {
-  if (!pdf.value) return
 
-  return new PDF(pdf.value)
+const documentRenderer = computed<DocumentRenderer | undefined>(() => {
+  if (!file.value) return undefined
+  
+  if (file.value.name.toLowerCase().endsWith('.docx')) {
+    return new DocxRenderer(file.value)
+  } else {
+    return new PDF(file.value)
+  }
 })
 
 const scanRenderer = ref(new ScanCacher(new CanvasScanner(config.value)))
@@ -86,13 +81,15 @@ watch(
   { deep: true }
 )
 
-const scale = computed(() => config.value.scale)
+const handleFileChange = async (newFile: File | undefined) => {
+  file.value = newFile
+}
 
 const { save, progress, saving, scannedPDF } = useSaveScannedPDF(
-  pdf,
-  pdfRenderer,
+  file,
+  documentRenderer,
   scanRenderer,
-  scale
+  computed(() => config.value.scale)
 )
 
 const generate = async () => {
@@ -103,4 +100,16 @@ const generate = async () => {
     message.error(t('actions.generateError') + (e as Error).message)
   }
 }
+
+// 加载示例 PDF
+const initExamplePDF = async () => {
+  const response = await fetch(PDFURL)
+  const blob = await response.blob()
+  const pdfFile = new File([blob], 'example.pdf')
+  if (!file.value) {
+    file.value = pdfFile
+  }
+}
+
+initExamplePDF()
 </script>

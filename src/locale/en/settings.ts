@@ -15,6 +15,7 @@ export const settings = {
   },
   rotate: 'Rotate',
   rotateVariance: 'Rotate Variance',
+  fileSelectLabel: 'Select PDF/DOCX',
   pdfSelectLabel: 'Select PDF',
   pdfNoSelectMessage: 'No PDF selected',
   scale: 'Resolution',

@@ -2,30 +2,12 @@ import type { Ref } from 'vue'
 import { get } from '@vueuse/core'
 import { ref, computed, watch } from 'vue'
 import { buildPDF } from '@/utils/pdf-builder/pdf-lib'
-
-interface PDFRenderer {
-  renderPage(
-    page: number,
-    scale: number
-  ): Promise<{
-    blob: Blob
-    height: number
-    width: number
-    ppi: number
-  }>
-  getNumPages(): Promise<number>
-}
-
-interface ScanRenderer {
-  renderPage(image: Blob): Promise<{
-    blob: Blob
-  }>
-}
+import type { DocumentRenderer, ScanRenderer as IScanRenderer } from '@/utils/document-renderer/types'
 
 export function useSaveScannedPDF(
-  pdf: Ref<File | undefined>,
-  pdfRenderer: Ref<PDFRenderer | undefined>,
-  scanRenderer: Ref<ScanRenderer | undefined>,
+  file: Ref<File | undefined>,
+  documentRenderer: Ref<DocumentRenderer | undefined>,
+  scanRenderer: Ref<IScanRenderer | undefined>,
   scale: Ref<number>
 ) {
   const finishedPages = ref(0)
@@ -40,7 +22,7 @@ export function useSaveScannedPDF(
   const saving = ref(false)
   const scannedPDF = ref<File | undefined>(undefined)
   const outputFilename = computed(() => {
-    const originalFilename = pdf.value?.name ?? 'doc.pdf'
+    const originalFilename = file.value?.name ?? 'doc.pdf'
     const filename = `${originalFilename.replace(/\.[^/.]+$/, '')}-scan.pdf`
     return filename
   })
@@ -48,63 +30,44 @@ export function useSaveScannedPDF(
   const reset = () => {
     finishedPages.value = 0
     totalPages.value = 0
-    scannedPDF.value = undefined
     saving.value = false
+    scannedPDF.value = undefined
   }
 
-  watch(pdfRenderer, reset)
-  watch(scanRenderer, reset)
-  watch(scale, reset)
+  watch(file, reset)
 
   const save = async () => {
+    if (!file.value || !documentRenderer.value || !scanRenderer.value) {
+      throw new Error('Missing required dependencies')
+    }
+
+    saving.value = true
+    reset()
+
     try {
-      finishedPages.value = 0
-      totalPages.value = 0
-      saving.value = true
+      totalPages.value = await documentRenderer.value.getNumPages()
+      const pages: Array<{ width: number; height: number; ppi: number; blob: Blob }> = []
 
-      const pdf = get(pdfRenderer)
-      const scan = get(scanRenderer)
-      const scale_ = get(scale)
-
-      if (!pdf || !scan) {
-        throw new Error('No PDF or Scan Renderer')
+      for (let i = 1; i <= totalPages.value; i++) {
+        const { blob, width, height, ppi } = await documentRenderer.value.renderPage(i, get(scale))
+        const { blob: scannedBlob } = await scanRenderer.value.renderPage(blob)
+        pages.push({ width, height, ppi, blob: scannedBlob })
+        finishedPages.value++
       }
 
-      const numPages = await pdf.getNumPages()
-
-      totalPages.value = numPages
-
-      // generate pdf pages 1...n
-      const pages = Array.from({ length: numPages }, (_, i) => i + 1)
-      const scanPages = await Promise.all(
-        pages.map(async (page) => {
-          const { blob: pdfPage, height, width } = await pdf.renderPage(page, scale_)
-          const { blob: scanPage } = await scan.renderPage(pdfPage)
-          finishedPages.value += 1
-          return {
-            blob: scanPage,
-            width,
-            height,
-            ppi: scale_ * 72
-          }
-        })
-      )
-
-      // generate pdf from scan pages
-      const pdfDocument = await buildPDF(scanPages)
-
-      scannedPDF.value = new File([pdfDocument], outputFilename.value, {
+      const pdfBlob = await buildPDF(pages)
+      scannedPDF.value = new File([pdfBlob], outputFilename.value, {
         type: 'application/pdf'
       })
-
-      return pdfDocument
-    } catch (e) {
-      console.error(e)
-      throw e
     } finally {
       saving.value = false
     }
   }
 
-  return { save, progress, saving, scannedPDF }
+  return {
+    save,
+    progress,
+    saving,
+    scannedPDF
+  }
 }
